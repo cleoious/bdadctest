@@ -1,4 +1,4 @@
--- ADC Hub - Blood Debt
+-- start lol so i don't cook this scripg
 
 local SAVE_FOLDER = "ADCHub"
 local KEY_FILE    = SAVE_FOLDER .. "/key.txt"
