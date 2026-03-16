@@ -3,8 +3,8 @@ local Rayfield = loadstring(game:HttpGet('https://sirius.menu/rayfield'))()
 local Window = Rayfield:CreateWindow({
     Name = "ADC Hub",
     Icon = 0,
-    LoadingTitle = " ADC Blood Debt",
-    LoadingSubtitle = "by shiejrjene(Wobwoxhan) ",
+    LoadingTitle = "ADC Blood Debt",
+    LoadingSubtitle = "by shiejrjene(Wobwoxhan)",
     Theme = "Default",
     DisableRayfieldPrompts = true,
     DisableBuildWarnings = true,
@@ -466,7 +466,7 @@ local function clearAllDroppedGunEsp()
     end
 end
 
-local MeleesFolder = BloodFolder:WaitForChild("Melees")
+local MeleesFolder = BloodFolder:FindFirstChild("Melees") or BloodFolder:WaitForChild("Melees", 10)
 
 local function clearMeleeEsp(item)
     if not item then return end
@@ -518,17 +518,19 @@ local function clearAllMeleeEsp()
     meleeHighlights = {}
 end
 
-MeleesFolder.ChildAdded:Connect(function(item)
-    if meleeEspEnabled then addMeleeEsp(item) end
-end)
+if MeleesFolder then
+    MeleesFolder.ChildAdded:Connect(function(item)
+        if meleeEspEnabled then addMeleeEsp(item) end
+    end)
 
-MeleesFolder.ChildRemoved:Connect(function(item)
-    clearMeleeEsp(item)
-    if meleeEspConnections[item] then
-        meleeEspConnections[item]:Disconnect()
-        meleeEspConnections[item] = nil
-    end
-end)
+    MeleesFolder.ChildRemoved:Connect(function(item)
+        clearMeleeEsp(item)
+        if meleeEspConnections[item] then
+            meleeEspConnections[item]:Disconnect()
+            meleeEspConnections[item] = nil
+        end
+    end)
+end
 
 local function tagPlayer(player, roleColor, labelText)
     if not player.Character then return end
