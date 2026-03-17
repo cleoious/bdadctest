@@ -1,5 +1,66 @@
 local Rayfield = loadstring(game:HttpGet('https://sirius.menu/rayfield'))()
 
+-- manual key check, saves so you only type it once
+local correctKey = "adchub1"
+local keyFilePath = "ADCKey.txt"
+local keyValid = false
+
+if isfile and isfile(keyFilePath) then
+    local saved = readfile(keyFilePath)
+    if saved and saved:gsub("%s", "") == correctKey then
+        keyValid = true
+    end
+end
+
+if not keyValid then
+    local keyWin = Rayfield:CreateWindow({
+        Name = "ADC Hub",
+        Icon = 0,
+        LoadingTitle = "ADC Hub",
+        LoadingSubtitle = "key required",
+        Theme = "Default",
+        DisableRayfieldPrompts = true,
+        DisableBuildWarnings = true,
+        ConfigurationSaving = {Enabled = false}
+    })
+
+    if not keyWin then return end
+
+    local keyTab = keyWin:CreateTab("Key System", 4483345998)
+
+    keyTab:CreateLabel("Join the discord for the key")
+
+    keyTab:CreateInput({
+        Name = "enter key",
+        PlaceholderText = "key here...",
+        RemoveTextAfterFocusLost = false,
+        Flag = "KeyInput",
+        Callback = function(text)
+            if text:gsub("%s", "") == correctKey then
+                if writefile then writefile(keyFilePath, text:gsub("%s", "")) end
+                keyValid = true
+                Rayfield:Notify({
+                    Title = "access granted",
+                    Content = "welcome to adc hub",
+                    Duration = 3,
+                    Image = 4483362458
+                })
+                task.wait(1)
+                keyWin:Destroy()
+            else
+                Rayfield:Notify({
+                    Title = "wrong key",
+                    Content = "that aint it bro",
+                    Duration = 3,
+                    Image = 4483362458
+                })
+            end
+        end
+    })
+
+    repeat task.wait(0.2) until keyValid
+end
+
 local Window = Rayfield:CreateWindow({
     Name = "ADC Hub",
     Icon = 0,
@@ -12,23 +73,10 @@ local Window = Rayfield:CreateWindow({
         Enabled = true,
         FolderName = "ADC",
         FileName = "ADCBloodDebtConfig"
-    },
-    KeySystem = {
-        Enabled = true,
-        Title = "ADC Hub",
-        Subtitle = "Key Required",
-        Note = "Join the discord for the key",
-        FileName = "ADCKey",
-        SaveKey = true,
-        GrabKeyFromSite = false,
-        Key = {"adchub1"}
     }
 })
 
-if not Window then
-    warn("window came back nil, key was probably cancelled or rayfield had an issue")
-    return
-end
+if not Window then return end
 
 local Tab = Window:CreateTab("Players", 4483345998)
 
@@ -962,10 +1010,8 @@ Tab:CreateToggle({Name = "show nametag", CurrentValue = true, Flag = "ESPNametag
 Tab:CreateToggle({Name = "show distance", CurrentValue = true, Flag = "ESPDistanceToggle", Callback = function(val) ESPConfig.ShowDistance = val end})
 Tab:CreateToggle({Name = "show health", CurrentValue = true, Flag = "ESPHealthToggle", Callback = function(val) ESPConfig.ShowHealth = val end})
 Tab:CreateToggle({Name = "show first item", CurrentValue = true, Flag = "ESPFirstItemToggle", Callback = function(val) ESPConfig.ShowFirstItem = val end})
-
 Tab:CreateSlider({Name = "highlight fill transparency", Range = {0, 10}, Increment = 1, Suffix = "/10", CurrentValue = 5, Flag = "ESPFillTransSlider", Callback = function(val) ESPConfig.FillTransparency = val / 10 end})
 Tab:CreateSlider({Name = "highlight outline transparency", Range = {0, 10}, Increment = 1, Suffix = "/10", CurrentValue = 0, Flag = "ESPOutlineTransSlider", Callback = function(val) ESPConfig.OutlineTransparency = val / 10 end})
-
 Tab:CreateColorPicker({Name = "killer color", Color = ESPConfig.KillerColor, Flag = "KillerColorPicker", Callback = function(val) ESPConfig.KillerColor = val killerColor = val end})
 Tab:CreateColorPicker({Name = "vigilante color", Color = ESPConfig.VigilanteColor, Flag = "VigilanteColorPicker", Callback = function(val) ESPConfig.VigilanteColor = val vigilanteColor = val end})
 Tab:CreateColorPicker({Name = "innocent color", Color = ESPConfig.InnocentColor, Flag = "InnocentColorPicker", Callback = function(val) ESPConfig.InnocentColor = val innocentColor = val end})
@@ -1197,7 +1243,6 @@ task.spawn(function()
     connectHintTextSignal()
     while true do
         detectRoles()
-
         local validTargetNames = {}
         for player, data in pairs(playerRoles) do
             if data then
@@ -1215,7 +1260,6 @@ task.spawn(function()
             end
         end
         getgenv().validSATargets = validTargetNames
-
         task.wait(0.5)
     end
 end)
