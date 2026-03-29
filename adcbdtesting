@@ -71,6 +71,7 @@ local _cfgApplying = true
 local ESPTab     = Window:CreateTab("ESP",             "eye")
 local ItemESPTab = Window:CreateTab("Item ESP",        "package")
 local AimbotTab  = Window:CreateTab("Aimbot",          "crosshair")
+local AutoAimTab = Window:CreateTab("Auto Aim",        "target")
 local MiscTab    = Window:CreateTab("Misc",            "settings")
 
 local Players           = game:GetService("Players")
@@ -418,12 +419,20 @@ local function cleanupESP(player)
     espObjects[player] = nil
 end
 
-local function setupESP(player)
+local function getPlayerFromName(name)
+    return Players:FindFirstChild(name)
+end
+
+local function setupESP(player, charOverride)
     cleanupESP(player)
     if not espEnabled or player == lp then return end
 
-    local char = player.Character
+    local npc  = Workspace:FindFirstChild("NPCSFolder")
+    local char = charOverride
+        or (npc and npc:FindFirstChild(player.Name))
+        or player.Character
     if not char then return end
+
     local hum = char:FindFirstChildOfClass("Humanoid")
     if not hum then return end
     local hrp = char:FindFirstChild("HumanoidRootPart")
@@ -431,14 +440,14 @@ local function setupESP(player)
 
     local hl = Instance.new("Highlight")
     hl.DepthMode           = Enum.HighlightDepthMode.AlwaysOnTop
-    hl.FillTransparency    = 0.5
-    hl.OutlineTransparency = 0
+    hl.FillTransparency    = 0.6
+    hl.OutlineTransparency = 0.2
     hl.Adornee             = char
     hl.Parent              = CoreGui
 
     local bb = Instance.new("BillboardGui")
-    bb.Size        = UDim2.fromOffset(200, 44)
-    bb.StudsOffset = Vector3.new(0, 3, 0)
+    bb.Size        = UDim2.fromOffset(160, 20)
+    bb.StudsOffset = Vector3.new(0, 2.8, 0)
     bb.AlwaysOnTop = true
     bb.MaxDistance = 1000
     bb.Adornee     = hrp
@@ -448,10 +457,9 @@ local function setupESP(player)
     lbl.BackgroundTransparency = 1
     lbl.Size                   = UDim2.fromScale(1, 1)
     lbl.TextScaled             = false
-    lbl.TextSize               = 12
-    lbl.RichText               = true
-    lbl.Font                   = Enum.Font.GothamBold
-    lbl.TextStrokeTransparency = 0.35
+    lbl.TextSize               = 11
+    lbl.Font                   = Enum.Font.Gotham
+    lbl.TextStrokeTransparency = 0.3
     lbl.TextColor3             = Color3.new(1, 1, 1)
     lbl.Parent                 = bb
 
@@ -462,32 +470,29 @@ local function setupESP(player)
             return
         end
 
-        local role, weapon = getPlayerRole(player)
-        local color        = getRoleColor(role)
-        local dist         = math.floor((Camera.CFrame.Position - hrp.Position).Magnitude)
-        local hp           = math.floor(hum.Health)
+        local role, _ = getPlayerRole(player)
+        local color   = getRoleColor(role)
+        local dist    = math.floor((Camera.CFrame.Position - hrp.Position).Magnitude)
 
         hl.FillColor    = color
         hl.OutlineColor = color
         hl.Enabled      = true
         bb.Enabled      = true
 
-        lbl.Text = string.format(
-            "<font size=\"11\"><b>[%s] %s</b></font>\n<font size=\"10\">%d hp  %d dist  %s</font>",
-            role,
-            player.Name,
-            hp,
-            dist,
-            weapon or "none"
-        )
+        lbl.TextColor3 = color
+        lbl.Text       = player.Name .. "  " .. dist .. "m"
     end)
 
     espObjects[player] = { highlight = hl, billboard = bb, conn = conn }
 end
 
 local function enableAllESP()
+    local npc = Workspace:FindFirstChild("NPCSFolder")
     for _, p in ipairs(Players:GetPlayers()) do
-        if p ~= lp and p.Character then setupESP(p) end
+        if p ~= lp then
+            local char = (npc and npc:FindFirstChild(p.Name)) or p.Character
+            if char then setupESP(p, char) end
+        end
     end
 end
 
@@ -495,12 +500,30 @@ local function disableAllESP()
     for p in pairs(espObjects) do cleanupESP(p) end
 end
 
+task.spawn(function()
+    local npc = Workspace:FindFirstChild("NPCSFolder") or Workspace:WaitForChild("NPCSFolder", 30)
+    if not npc then return end
+
+    for _, char in ipairs(npc:GetChildren()) do
+        local p = getPlayerFromName(char.Name)
+        if p and p ~= lp and espEnabled then setupESP(p, char) end
+    end
+
+    npc.ChildAdded:Connect(function(char)
+        task.wait()
+        if not espEnabled then return end
+        local p = getPlayerFromName(char.Name)
+        if p and p ~= lp then setupESP(p, char) end
+    end)
+
+    npc.ChildRemoved:Connect(function(char)
+        local p = getPlayerFromName(char.Name)
+        if p then cleanupESP(p) end
+    end)
+end)
+
 for _, p in ipairs(Players:GetPlayers()) do
     if p ~= lp then
-        p.CharacterAdded:Connect(function()
-            task.wait(0.2)
-            if espEnabled then setupESP(p) end
-        end)
         p.AncestryChanged:Connect(function(_, parent)
             if not parent then cleanupESP(p) end
         end)
@@ -509,10 +532,6 @@ end
 
 Players.PlayerAdded:Connect(function(p)
     if p == lp then return end
-    p.CharacterAdded:Connect(function()
-        task.wait(0.2)
-        if espEnabled then setupESP(p) end
-    end)
     p.AncestryChanged:Connect(function(_, parent)
         if not parent then cleanupESP(p) end
     end)
@@ -639,11 +658,9 @@ local newcclosure   = newcclosure or clonefunction
 
 local RS      = cloneref(game:GetService("ReplicatedStorage"))
 local Players = cloneref(game:GetService("Players"))
-local UIS     = cloneref(game:GetService("UserInputService"))
+local Workspace = game:GetService("Workspace")
 local lp      = Players.LocalPlayer
-local cam     = workspace.CurrentCamera
-local npc     = workspace.NPCSFolder
-local bf      = workspace.BloodFolder
+local cam     = Workspace.CurrentCamera
 
 if getgenv().aimbotEnabled == nil then getgenv().aimbotEnabled = false end
 if getgenv().hitChance     == nil then getgenv().hitChance     = 100   end
@@ -651,20 +668,24 @@ if getgenv().wallcheck     == nil then getgenv().wallcheck     = false end
 if getgenv().radius        == nil then getgenv().radius        = 300   end
 if getgenv().validTargets  == nil then getgenv().validTargets  = {}    end
 
-local isMobile = UIS.TouchEnabled and not UIS.KeyboardEnabled and not UIS.MouseEnabled
-
 local rp = RaycastParams.new()
 rp.FilterType  = Enum.RaycastFilterType.Exclude
 rp.IgnoreWater = true
 
 local function setupFilter(char)
     if not char then return end
+    local bf = Workspace:FindFirstChild("BloodFolder")
     local filter = {char}
-    local function tryAdd(name) local v = bf:FindFirstChild(name, true); if v then filter[#filter+1] = v end end
-    tryAdd("ALWAYSHERE"); tryAdd("CheckingWalking"); tryAdd("INVISBARRIERS")
-    tryAdd("Spawns"); tryAdd("TREES"); tryAdd("InvisibleWall"); tryAdd("Cleaning windows")
-    for _, v in next, bf:GetDescendants() do
-        if v.Name:lower():match("window", 1) then filter[#filter+1] = v end
+    if bf then
+        local function tryAdd(name)
+            local v = bf:FindFirstChild(name, true)
+            if v then filter[#filter+1] = v end
+        end
+        tryAdd("ALWAYSHERE"); tryAdd("CheckingWalking"); tryAdd("INVISBARRIERS")
+        tryAdd("Spawns"); tryAdd("TREES"); tryAdd("InvisibleWall"); tryAdd("Cleaning windows")
+        for _, v in ipairs(bf:GetDescendants()) do
+            if v.Name:lower():match("window", 1) then filter[#filter+1] = v end
+        end
     end
     rp.FilterDescendantsInstances = filter
 end
@@ -685,7 +706,7 @@ end
 
 local function isVisible(part, origin)
     if not part then return false end
-    local result = workspace:Raycast(origin, part.Position - origin, rp)
+    local result = Workspace:Raycast(origin, part.Position - origin, rp)
     if not result then return true end
     if result.Instance:IsDescendantOf(part.Parent) then return true end
     return false
@@ -694,39 +715,51 @@ end
 local function getTarget(origin)
     if not getgenv().aimbotEnabled then return nil end
     local valid    = getgenv().validTargets
-    local mousePos = isMobile and Vector2.new(cam.ViewportSize.X/2, cam.ViewportSize.Y/2) or UIS:GetMouseLocation()
+    -- use screen center since UIS may not work in actor threads
+    local mousePos = Vector2.new(cam.ViewportSize.X / 2, cam.ViewportSize.Y / 2)
     local bestPart, bestDist = nil, getgenv().radius
 
-    for _, char in next, npc:GetChildren() do
-        if char == lp.Character then continue end
-        if isSameTeam(char) then continue end
+    local npc = Workspace:FindFirstChild("NPCSFolder")
+    if not npc then return nil end
 
-        -- role check via validTargets (keyed by player name = char name in NPCSFolder)
-        if not valid[char.Name] then continue end
-
-        if char:FindFirstChildOfClass("ForceField") then continue end
-        local hum = char:FindFirstChild("Humanoid")
-        if not hum or hum.Health <= 0 then continue end
-        local pt = char:FindFirstChild("PlayerThings")
-        if pt and pt:FindFirstChild("Downed") and pt.Downed.Value then continue end
-
-        local tPart = char:FindFirstChild("Head") or char.PrimaryPart or char:FindFirstChild("HumanoidRootPart")
-        if not tPart then continue end
-
-        local pos, onScreen = cam:WorldToViewportPoint(tPart.Position)
-        if not onScreen then continue end
-
-        if getgenv().wallcheck then
-            if not isVisible(tPart, origin) then
-                local hrp = char.PrimaryPart or char:FindFirstChild("HumanoidRootPart")
-                if not hrp or not isVisible(hrp, origin) then continue end
-            end
+    for _, char in ipairs(npc:GetChildren()) do
+        local skip = false
+        if char == lp.Character then skip = true end
+        if not skip and isSameTeam(char) then skip = true end
+        if not skip and not valid[char.Name] then skip = true end
+        if not skip and char:FindFirstChildOfClass("ForceField") then skip = true end
+        if not skip then
+            local hum = char:FindFirstChild("Humanoid")
+            if not hum or hum.Health <= 0 then skip = true end
+        end
+        if not skip then
+            local pt = char:FindFirstChild("PlayerThings")
+            if pt and pt:FindFirstChild("Downed") and pt.Downed.Value then skip = true end
         end
 
-        local dist = (Vector2.new(pos.X, pos.Y) - mousePos).Magnitude
-        if dist < bestDist then
-            bestDist = dist
-            bestPart = tPart
+        if not skip then
+            local tPart = char:FindFirstChild("Head") or char.PrimaryPart or char:FindFirstChild("HumanoidRootPart")
+            if tPart then
+                local pos, onScreen = cam:WorldToViewportPoint(tPart.Position)
+                if onScreen then
+                    local wallBlocked = false
+                    if getgenv().wallcheck then
+                        if not isVisible(tPart, origin) then
+                            local hrp = char.PrimaryPart or char:FindFirstChild("HumanoidRootPart")
+                            if not hrp or not isVisible(hrp, origin) then
+                                wallBlocked = true
+                            end
+                        end
+                    end
+                    if not wallBlocked then
+                        local dist = (Vector2.new(pos.X, pos.Y) - mousePos).Magnitude
+                        if dist < bestDist then
+                            bestDist = dist
+                            bestPart = tPart
+                        end
+                    end
+                end
+            end
         end
     end
 
@@ -891,30 +924,212 @@ AimbotTab:CreateDropdown({
 })
 
 -- misc tab
-local proxConns = {}
 
-local function patchPrompt(pp)
-    if pp:IsA("ProximityPrompt") then pp.HoldDuration = 0 end
-end
 
-local function enableNoProx()
-    for _, v in ipairs(Workspace:GetDescendants()) do patchPrompt(v) end
-    proxConns[#proxConns+1] = Workspace.DescendantAdded:Connect(patchPrompt)
-end
 
-local function disableNoProx()
-    for _, c in ipairs(proxConns) do c:Disconnect() end
-    proxConns = {}
-end
+-- auto aim
+local AutoAimCfg = {
+    enabled    = false,
+    fov        = 300,
+    fovVisible = true,
+    smoothness = 0.3,
+    part       = "Head",
+}
 
-MiscTab:CreateToggle({
-    Name         = "Instant Proximity Prompts",
-    CurrentValue = cfgGet("NoProx", false),
-    Flag         = "NoProx",
+local autoAimFovCircle         = Drawing.new("Circle")
+autoAimFovCircle.Filled        = false
+autoAimFovCircle.NumSides      = 60
+autoAimFovCircle.Thickness     = 1.5
+autoAimFovCircle.Color         = Color3.fromRGB(255, 100, 100)
+
+RunService.RenderStepped:Connect(function()
+    local vp = Camera.ViewportSize
+    autoAimFovCircle.Radius   = AutoAimCfg.fov
+    autoAimFovCircle.Position = Vector2.new(vp.X / 2, vp.Y / 2)
+    autoAimFovCircle.Visible  = AutoAimCfg.fovVisible and AutoAimCfg.enabled
+
+    if not AutoAimCfg.enabled then return end
+
+    local UIS    = game:GetService("UserInputService")
+    local center = Vector2.new(vp.X / 2, vp.Y / 2)
+    local bestPart, bestDist = nil, AutoAimCfg.fov
+
+    local npc = Workspace:FindFirstChild("NPCSFolder")
+    if not npc then return end
+    local targets = AutoAimCfg.targets or {"Killer"}
+
+    for _, char in next, npc:GetChildren() do
+        if char == lp.Character then continue end
+
+        -- role check via validTargets
+        if not validTargets[char.Name] then continue end
+
+        local hum = char:FindFirstChild("Humanoid")
+        if not hum or hum.Health <= 0 then continue end
+
+        local pt = char:FindFirstChild(AutoAimCfg.part) or char:FindFirstChild("HumanoidRootPart")
+        if not pt then continue end
+
+        local vPoint, onScreen = Camera:WorldToViewportPoint(pt.Position)
+        if not onScreen then continue end
+
+        local screenDist = (Vector2.new(vPoint.X, vPoint.Y) - center).Magnitude
+        if screenDist < bestDist then
+            bestDist = screenDist
+            bestPart = pt
+        end
+    end
+
+    if bestPart then
+        local targetCF = CFrame.new(Camera.CFrame.Position, bestPart.Position)
+        Camera.CFrame  = Camera.CFrame:Lerp(targetCF, AutoAimCfg.smoothness)
+    end
+end)
+
+AutoAimTab:CreateToggle({
+    Name         = "Enable Auto Aim",
+    CurrentValue = cfgGet("AutoAimEnabled", false),
+    Flag         = "AutoAimEnabled",
     Callback     = function(val)
-        cfgSet("NoProx", val)
+        cfgSet("AutoAimEnabled", val)
         if _cfgApplying then return end
-        if val then enableNoProx() else disableNoProx() end
+        AutoAimCfg.enabled = val
+    end,
+})
+
+AutoAimTab:CreateSlider({
+    Name         = "FOV Radius",
+    Range        = {50, 800},
+    Increment    = 5,
+    CurrentValue = cfgGet("AutoAimFOV", 300),
+    Flag         = "AutoAimFOV",
+    Callback     = function(val)
+        cfgSet("AutoAimFOV", val)
+        if _cfgApplying then return end
+        AutoAimCfg.fov = val
+    end,
+})
+
+AutoAimTab:CreateToggle({
+    Name         = "Show FOV Circle",
+    CurrentValue = cfgGet("AutoAimFOVVisible", true),
+    Flag         = "AutoAimFOVVisible",
+    Callback     = function(val)
+        cfgSet("AutoAimFOVVisible", val)
+        if _cfgApplying then return end
+        AutoAimCfg.fovVisible = val
+    end,
+})
+
+AutoAimTab:CreateSlider({
+    Name         = "Smoothness",
+    Range        = {1, 100},
+    Increment    = 1,
+    Suffix       = "%",
+    CurrentValue = cfgGet("AutoAimSmoothness", 30),
+    Flag         = "AutoAimSmoothness",
+    Callback     = function(val)
+        cfgSet("AutoAimSmoothness", val)
+        if _cfgApplying then return end
+        AutoAimCfg.smoothness = val / 100
+    end,
+})
+
+AutoAimTab:CreateDropdown({
+    Name          = "Target Part",
+    Options       = {"Head", "Torso", "HumanoidRootPart"},
+    CurrentOption = {cfgGet("AutoAimPart", "Head")},
+    Flag          = "AutoAimPart",
+    Callback      = function(opt)
+        local choice = type(opt) == "table" and opt[1] or opt
+        cfgSet("AutoAimPart", choice)
+        if _cfgApplying then return end
+        AutoAimCfg.part = choice
+    end,
+})
+
+AutoAimTab:CreateDropdown({
+    Name            = "Target Roles",
+    Options         = {"Killer", "Vigilante", "Innocent"},
+    CurrentOption   = cfgGet("AutoAimRoles", {"Killer"}),
+    MultipleOptions = true,
+    Flag            = "AutoAimRoles",
+    Callback        = function(opts)
+        cfgSet("AutoAimRoles", opts)
+        if _cfgApplying then return end
+        AutoAimCfg.targets = type(opts) == "table" and opts or {"Killer"}
+    end,
+})
+
+
+-- mobile floating button
+local CoreGui = game:GetService("CoreGui")
+
+local autoAimGui        = Instance.new("ScreenGui")
+autoAimGui.Name         = "ADCAutoAimBtn"
+autoAimGui.ResetOnSpawn = false
+autoAimGui.Enabled      = false
+autoAimGui.Parent       = CoreGui
+
+local autoAimBtn                    = Instance.new("TextButton")
+autoAimBtn.Size                     = UDim2.fromOffset(75, 75)
+autoAimBtn.Position                 = UDim2.new(0.08, 0, 0.65, 0)
+autoAimBtn.BackgroundColor3         = Color3.fromRGB(30, 30, 30)
+autoAimBtn.BackgroundTransparency   = 0.3
+autoAimBtn.TextColor3               = Color3.new(1, 1, 1)
+autoAimBtn.Text                     = "AIM
+OFF"
+autoAimBtn.TextScaled               = true
+autoAimBtn.Font                     = Enum.Font.GothamBold
+autoAimBtn.Parent                   = autoAimGui
+
+local corner = Instance.new("UICorner")
+corner.CornerRadius = UDim.new(0.5, 0)
+corner.Parent       = autoAimBtn
+
+-- drag support
+do
+    local dragging, dragStart, startPos
+    autoAimBtn.InputBegan:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.Touch then
+            dragging  = true
+            dragStart = input.Position
+            startPos  = autoAimBtn.Position
+        end
+    end)
+    autoAimBtn.InputChanged:Connect(function(input)
+        if dragging and input.UserInputType == Enum.UserInputType.Touch then
+            local delta = input.Position - dragStart
+            autoAimBtn.Position = UDim2.new(
+                startPos.X.Scale, startPos.X.Offset + delta.X,
+                startPos.Y.Scale, startPos.Y.Offset + delta.Y
+            )
+        end
+    end)
+    autoAimBtn.InputEnded:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.Touch then
+            dragging = false
+        end
+    end)
+end
+
+local function updateBtn()
+    local on = AutoAimCfg.enabled
+    autoAimBtn.Text             = on and "AIM
+ON" or "AIM
+OFF"
+    autoAimBtn.BackgroundColor3 = on and Color3.fromRGB(220, 50, 50) or Color3.fromRGB(30, 30, 30)
+end
+
+autoAimBtn.MouseButton1Click:Connect(function()
+    AutoAimCfg.enabled = not AutoAimCfg.enabled
+    updateBtn()
+end)
+
+AutoAimTab:CreateButton({
+    Name     = "Spawn Mobile Button",
+    Callback = function()
+        autoAimGui.Enabled = not autoAimGui.Enabled
     end,
 })
 
@@ -1193,11 +1408,17 @@ task.delay(1, function()
         enableAllItemESP()
     end
 
-    if cfgGet("NoProx", false) then enableNoProx() end
-
     speedCfg.multiplier = cfgGet("SpeedMult", 100) / 100
     -- re-fetch BloodFolder in case it wasn't loaded yet
     if not BloodFolder then BloodFolder = Workspace:FindFirstChild("BloodFolder") end
+
+    AutoAimCfg.fov        = cfgGet("AutoAimFOV", 300)
+    AutoAimCfg.fovVisible = cfgGet("AutoAimFOVVisible", true)
+    AutoAimCfg.smoothness = cfgGet("AutoAimSmoothness", 30) / 100
+    AutoAimCfg.part       = cfgGet("AutoAimPart", "Head")
+    local aar = cfgGet("AutoAimRoles", {"Killer"})
+    AutoAimCfg.targets = type(aar) == "table" and aar or {"Killer"}
+    if cfgGet("AutoAimEnabled", false) then AutoAimCfg.enabled = true end
 
     if cfgGet("SpeedEnabled", false) then
         speedCfg.enabled = true
